@@ -1,0 +1,58 @@
+name: Daily Ninja Code
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  generate-and-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set date
+        run: echo "DATE=$(date -u +%F)" >> $GITHUB_ENV
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install --upgrade requests
+
+      - name: Generate daily ninja code
+        env:
+          HF_MODEL: bigcode/starcoder2-1b
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          COMMIT_AUTHOR_NAME: ${{ secrets.COMMIT_AUTHOR_NAME }}
+          COMMIT_AUTHOR_EMAIL: ${{ secrets.COMMIT_AUTHOR_EMAIL }}
+        run: python main.py
+
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: chore(ninja): add daily AI-generated Python ninja script
+          branch: auto/daily-ninja-${{ env.DATE }}
+          title: Daily Ninja ${{ env.DATE }}
+          body: |
+            This PR adds the daily AI-generated Python "ninja" learning script.
+          labels: automated,daily,ninja
+
+      - name: Merge Pull Request
+        if: steps.cpr.outputs.pull-request-number != ''
+        uses: peter-evans/merge-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pull-request: ${{ steps.cpr.outputs.pull-request-number }}
+          merge-method: squash
+          delete-branch: true
